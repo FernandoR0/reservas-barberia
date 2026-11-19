@@ -35,9 +35,11 @@ cp -r resources/views "$APP/resources/"
 mkdir -p "$APP/storage/app/public" "$APP/storage/logs" \
          "$APP/storage/framework/cache/data" "$APP/storage/framework/sessions" "$APP/storage/framework/views"
 rm -f "$APP"/bootstrap/cache/*.php
-# Un .zip no guarda carpetas vacías: este archivo hace que existan al descomprimir.
+# Un .zip no guarda carpetas vacías, y algunos extractores de hosting se saltan
+# los archivos de 0 bytes: este archivo con texto hace que existan al descomprimir.
+# (Además index.php las crea si faltan.)
 for d in storage/app/public storage/logs storage/framework/cache/data storage/framework/sessions storage/framework/views bootstrap/cache; do
-    touch "$APP/$d/.mantener"
+    echo "Carpeta necesaria para Laravel. No la borres." > "$APP/$d/LEEME.txt"
 done
 
 echo "› Instalando dependencias de producción (sin las de desarrollo)"
@@ -45,7 +47,7 @@ MSYS_NO_PATHCONV=1 docker run --rm -v "$(ruta_docker "$APP"):/app" -w /app compo
     install --no-dev --optimize-autoloader --no-interaction --no-progress --ignore-platform-req=ext-* --quiet
 
 echo "› Copiando la parte pública"
-cp -r public/build public/favicon.ico public/robots.txt public/.htaccess "$HTDOCS/"
+cp -r public/build public/robots.txt public/.htaccess "$HTDOCS/"
 cat > "$HTDOCS/index.php" <<'PHP'
 <?php
 
@@ -53,6 +55,13 @@ use Illuminate\Foundation\Application;
 use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
+
+// Carpetas donde Laravel escribe. Si el hosting no las creó al descomprimir, se crean aquí.
+foreach (['storage/framework/views', 'storage/framework/sessions', 'storage/framework/cache/data', 'storage/logs', 'bootstrap/cache'] as $carpeta) {
+    if (! is_dir(__DIR__.'/laravel/'.$carpeta)) {
+        @mkdir(__DIR__.'/laravel/'.$carpeta, 0755, true);
+    }
+}
 
 if (file_exists($maintenance = __DIR__.'/laravel/storage/framework/maintenance.php')) {
     require $maintenance;
